@@ -8,8 +8,8 @@ description: Objectively review a plan produced by grill-yourself (or any plan w
   evidence) × severity (Blocker/Advisory) — plus a diff-style revision for Blockers, a
   disposition, and a re-grill list. Flags: --deep (parallel reviewers), auto (hands-free
   fix loop that also folds Advisory into the revision). Optional model arg
-  (sonnet/opus/haiku/fable) picks the reviewer model; omitted = inherit this agent's
-  model. Invoke explicitly with /grill-review.
+  (sonnet/opus/haiku/fable) picks the reviewer model; omitted = cross-match (sonnet↔opus)
+  for independence, else inherit this agent's model. Invoke explicitly with /grill-review.
 disable-model-invocation: true
 ---
 
@@ -47,8 +47,10 @@ alongside any flags. Resolve the reviewer model **once** and apply it to **every
 spawn below (the default reviewer, the `--deep` reviewers, and the `auto`-loop reviewers):
 
 - **Model name given** → pass it as the Agent tool's `model` override on every spawn.
-- **No model name given** → OMIT the `model` parameter so each reviewer inherits *your*
-  (the grill-review orchestrator's) current model. Do not hard-code a model.
+- **No model name given** → cross-match for maximum independence:
+  - Orchestrator is `sonnet` → reviewer uses `opus`
+  - Orchestrator is `opus` → reviewer uses `sonnet`
+  - Otherwise (haiku, fable, or unknown) → OMIT the `model` parameter so the reviewer inherits your current model.
 
 Parse args leniently: a token matching a known model name sets the reviewer model;
 `deep`/`--deep` and `auto`/`--auto` set the flags (below); a `.md` token is the plan
@@ -146,8 +148,21 @@ Return, in order:
 3. **Disposition** — one line: **SHIP / REVISE (which rows) / REJECT**.
 4. **Re-grill list** — the false / unverifiable items, split Auto-fixable vs Needs-you.
 
-Then **offer once** (default mode only): "Re-grill the auto-fixable rows now?" Route the
-needs-you bucket to the user; never silently resolve it.
+Then **offer once** (default mode only): "Re-grill the auto-fixable rows now?"
+
+**Needs-you grilling (default mode only, when Needs-you items exist):** After relaying the
+report, immediately use the `AskUserQuestion` tool to ask the user about each Needs-you item.
+Skip this entirely in `auto` mode — auto is hands-free and handles Needs-you rows via its own
+best-guess re-fill (see the `auto` section); never inject an interactive question into an
+auto run.
+- Convert each unresolved assumption into a concrete, answerable question. Never ask a yes/no
+  question — force a specific choice or concrete answer. Users can always pick "Other" to
+  type a custom answer.
+- AskUserQuestion accepts 1–4 questions per call. If there are more than 4 Needs-you items,
+  batch across multiple sequential calls.
+- After the user answers, record each answer as a **confirmed assumption** in chat and note
+  which Needs-you item it resolves. Do not silently absorb the answers — make the resolution
+  visible so the user can see which gaps are now closed.
 
 ### Disposition line (computed mechanically)
 - `REJECT` / `REVISE (#…)` — Blocker > 0
@@ -162,11 +177,10 @@ Instead of one reviewer, spawn in parallel on the resolved model:
   are many rows, shard this across several fact-checkers by row.
 - **critic** — axes ①⑤ + plan-level coherence / feasibility only.
 
-Merge and dedupe their findings into the single output above. (Same-model reviewers
-share training blind spots; --deep buys depth-per-lens, not true independence.) For
-genuine independence, spawn the reviewers on a **different model** than the one that
-authored the plan — pass it as the explicit model arg. That, not just more reviewers,
-is what escapes shared blind spots.
+Merge and dedupe their findings into the single output above. (Same-model reviewers share
+training blind spots; --deep buys depth-per-lens, not true independence — genuine independence
+comes from a **different reviewer model**, which the default cross-match (sonnet↔opus) already
+gives you, or which you can force with an explicit model arg.)
 
 ## `auto` (hands-free fix loop, Advisory included)
 Skip the confirmation and run the fix loop yourself. `auto` does two things at once:
@@ -193,8 +207,10 @@ language, the plan's content, or the finding count.
 ## Hard constraints
 - **Never modify files.** Not the plan, not the codebase, not docs. The output is a
   single message. Editing is the next turn's job, driven by the user.
-- **Never re-enter Q&A.** If the plan is ambiguous, log it as a Vagueness finding and
-  move on. Do not ask clarifying questions.
+- **Never re-enter Q&A (reviewer only).** The reviewer subagent must not ask clarifying
+  questions — if the plan is ambiguous, log it as a Vagueness finding and move on.
+  (The orchestrator's post-review Needs-you grilling via AskUserQuestion is the one
+  deliberate exception and is handled after the report is relayed, not during review.)
 - **Never invent Reality mismatches.** If you didn't actually grep/read, you can't claim
   the codebase contradicts the plan.
 - **Never fill quota.** No findings on an axis is the correct output when there are none.
