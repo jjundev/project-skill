@@ -150,19 +150,20 @@ Return, in order:
 
 Then **offer once** (default mode only): "Re-grill the auto-fixable rows now?"
 
-**Needs-you grilling (default mode only, when Needs-you items exist):** After relaying the
-report, immediately use the `AskUserQuestion` tool to ask the user about each Needs-you item.
-Skip this entirely in `auto` mode — auto is hands-free and handles Needs-you rows via its own
-best-guess re-fill (see the `auto` section); never inject an interactive question into an
-auto run.
+**Needs-you grilling (both modes, when Needs-you items exist):** After the review (default) or
+after the fix loop completes (auto), use the `AskUserQuestion` tool to ask the user about each
+Needs-you item.
 - Convert each unresolved assumption into a concrete, answerable question. Never ask a yes/no
   question — force a specific choice or concrete answer. Users can always pick "Other" to
   type a custom answer.
 - AskUserQuestion accepts 1–4 questions per call. If there are more than 4 Needs-you items,
   batch across multiple sequential calls.
-- After the user answers, record each answer as a **confirmed assumption** in chat and note
-  which Needs-you item it resolves. Do not silently absorb the answers — make the resolution
-  visible so the user can see which gaps are now closed.
+- For each question, include a recommended option — place it first in the options list and
+  append `(Recommended)` to its label.
+- After the user answers, apply each answer to patch the relevant decision in the plan: output
+  a revised version of that decision inline in chat, mark it as **[confirmed]**, and note which
+  Needs-you item it resolves. Do not silently absorb the answers — make the resolution visible
+  so the user can see which gaps are now closed.
 
 ### Disposition line (computed mechanically)
 - `REJECT` / `REVISE (#…)` — Blocker > 0
@@ -185,7 +186,9 @@ gives you, or which you can force with an explicit model arg.)
 ## `auto` (hands-free fix loop, Advisory included)
 Skip the confirmation and run the fix loop yourself. `auto` does two things at once:
 it **folds Advisory findings into the revision** (not just Blockers), and it **drives a
-hands-free re-derive loop**:
+hands-free re-derive loop**. After the loop, Needs-you items are resolved interactively
+via AskUserQuestion (same as default mode) — the loop is hands-free; the Needs-you
+resolution step is not:
 - **Auto-fixable rows** → re-derive them by invoking the `grill-yourself` skill (via the
   Skill tool) on those rows. It relies on the prior decision table being in context; if
   its instructions aren't loaded, read `~/.claude/skills/grill-yourself/SKILL.md` first.
@@ -194,9 +197,9 @@ hands-free re-derive loop**:
   Keep every revision in chat — never write it back over the input `.md`.
 - **Oscillation guard** — if a fix introduces a new failure, stop and report rather
   than looping.
-- **Needs-you (user-only) rows** → you CANNOT truly resolve these. Re-fill them with a
-  best-guess assumption so the plan stays complete, but ALWAYS report them in the final
-  output as still-unverified 가정. Never claim they are resolved.
+- **Needs-you (user-only) rows** → Do NOT best-guess fill. After the fix loop completes,
+  the orchestrator uses AskUserQuestion to resolve these interactively (see *Needs-you grilling*
+  above). The fix loop itself runs hands-free; the Needs-you resolution step follows after.
 
 `--deep` and `auto` are orthogonal and combine (`/grill-review --deep auto`). Accept the
 flags with or without leading dashes and in any order, and an optional model name
