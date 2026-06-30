@@ -1,10 +1,11 @@
 ---
 name: grill-yourself
-description: Autonomously self-interview a plan or design — pose each grilling
-  question AND answer it with your own recommended choice, then produce a two-bucket
-  decision table (Confident / Assumptions·needs you) plus a plan. No back-and-forth
-  dialogue. Terminates on convergence or a 20-decision safety cap. Read-only: never
-  edits project code. Invoke explicitly with /grill-yourself.
+description: >-
+  Autonomously self-interview a plan or design — pose each grilling question AND
+  answer it with your own recommended choice, then produce a two-bucket decision
+  table (Confident / Assumptions·needs you) plus a plan. No back-and-forth
+  dialogue. Terminates on convergence or a 20-decision safety cap. Read-only:
+  never edits project code. Invoke explicitly with /grill-yourself.
 disable-model-invocation: true
 ---
 

@@ -1,0 +1,275 @@
+---
+name: grill-verify
+description: Objectively verify that a finished IMPLEMENTATION matches the plan that
+  specified it — the post-implementation companion to grill-review. Spawns a fresh
+  read-only subagent that never saw the authoring reasoning, treats the plan's decision
+  table as the SPEC and the actual code as the RESULT, and checks each decision both by
+  reading code AND by running tests/build/typecheck/lint/app (dynamic verification). Each
+  decision gets a three-layer verdict — diagnostic axis (Fidelity/Divergence/Omission/
+  Regression/Scope-creep) × state (implemented/deviated/missing/unverifiable, file:line +
+  run-output evidence) × severity (Blocker/Advisory) — plus a mechanical disposition
+  (VERIFIED/PASS/FIX/FAIL). Flags: --deep (parallel static-checker + dynamic-runner), auto
+  (hands-free loop that edits IMPLEMENTATION CODE ONLY to close Blocker gaps). Optional model
+  arg (sonnet/opus/haiku/fable) picks the verifier model; omitted = cross-match (sonnet↔opus)
+  for independence, else inherit this agent's model. Invoke explicitly with /grill-verify.
+disable-model-invocation: true
+---
+
+The post-implementation companion to `grill-review`. A plan said what to build; this
+skill checks whether the code that got built actually does it. The agent that wrote the
+code is the worst judge of whether it matches the spec — it remembers what it *meant*,
+not what it *typed*. So the verification is NEVER done by you (the current agent). You
+hand the plan + the real implementation to a fresh subagent and relay its verdict.
+
+This skill completes the grill family:
+- `grill-me` / `grill-yourself` → produce a plan
+- `grill-review` → critique that plan from a fresh context (pre-implementation)
+- **`grill-verify`** → verify the implementation against that plan (this skill, post-implementation)
+
+The plan's decision table is the **SPEC**; the actual code is the **RESULT**. The
+verifier asks one question per decision: *was this built, as decided, and does it
+actually work?*
+
+## Identity & the one mutation carve-out
+**Default mode is read-only reporting; the verifier never edits any file.** The single
+exception is opt-in `auto`, which edits **implementation code ONLY** (never the plan
+`.md`, never docs) to close *verified Blocker* gaps, bounded by `max 3 iterations` and an
+oscillation guard. "Never modify files" is a hard constraint **scoped to default/report
+mode** — see *Hard constraints*. Outside `auto`, the output is a single message; mutating
+anything is the next turn's job, driven by the user.
+
+## Input
+Take the plan + decision table from a `.md` path if given as an argument, otherwise from
+the most recent plan in the conversation. If neither exists — no path and no plan
+inferable — ask the user for the plan to verify against; do not invent one.
+
+Identify the **implementation under test**:
+- If the args name a PR#, commit range, or path, use that.
+- Otherwise, detect the repo's default branch dynamically (do NOT hardcode `main`):
+  `git symbolic-ref refs/remotes/origin/HEAD` → on failure `git remote show origin`
+  (parse `HEAD branch`) → on failure use whichever of `main`/`master` exists → if none
+  resolves, ask the user. The implementation = the diff from
+  `merge-base(defaultBranch, HEAD)` to `HEAD`, plus the uncommitted working tree.
+
+Note which repo / working directory the plan targets and pass that to the verifier as
+ground truth (the plan `.md` may live in a fixture or describe a different repo than cwd).
+
+**Never overwrite the input `.md`.** Return the verification report — and any code fixes
+from `auto` — in chat (code fixes land in the working tree, the report does not). Write a
+report to a file only if the user explicitly asks.
+
+**Hard rule — purity of what you pass.** When you spawn the verifier, pass ONLY the plan
+and its decision table, VERBATIM, plus the implementation scope. Never include your own
+authoring reasoning or any defense of the code. The verifier must read both cold, as a
+stranger's work. The fresh subagent context is wasted if you leak authoring context.
+
+## Model selection (optional arg)
+The args may carry a model name — `sonnet` / `opus` / `haiku` / `fable` — alongside any
+flags. Resolve the verifier model **once** and apply it to **every** Agent spawn (default
+verifier, `--deep` verifiers, `auto`-loop verifiers):
+- **Model name given** → pass it as the Agent tool's `model` override on every spawn.
+- **No model name given** → cross-match for independence:
+  - Orchestrator is `sonnet` → verifier uses `opus`
+  - Orchestrator is `opus` → verifier uses `sonnet`
+  - Otherwise (haiku, fable, unknown) → OMIT `model` so the verifier inherits your model.
+
+Parse args leniently: a token matching a known model name sets the model; `deep`/`--deep`
+and `auto`/`--auto` set the flags; a `.md` token is the plan path; a `#N`/`PR#N`/commit
+range/path token is the implementation scope. Order doesn't matter, dashes are optional.
+
+## How to run (default: single verifier, report-only)
+Use the Agent tool with `subagent_type=general-purpose`, passing the resolved model, to
+run the verification in a fresh context.
+
+(Note: `general-purpose` retains write tools AND keeps full audit depth — read-only here
+is enforced by **directive**, not by the harness. This mirrors `grill-review`, which uses
+general-purpose precisely because `Explore` trades away audit depth. State the read-only
+rule explicitly and forbid the verifier from spawning further agents. If you ever want
+harness-enforced read-only at the cost of audit depth, `subagent_type=Explore` removes
+the write tools — but it is NOT the default. The default verifier and the `auto`-mode
+fixer are the **same** subagent type; the ONLY difference is the directive: read-only vs
+allowed-to-edit-implementation-code. There is no subagent-type switch to specify.)
+
+Instruct that subagent to:
+
+- Treat the plan as the spec and the code as a stranger's work — do NOT defend either.
+- Work **read-only**: Read / Grep / Glob and Bash for inspection AND for **dynamic
+  verification** (running tests/build/typecheck/lint/app). Never Edit, Write, or
+  NotebookEdit; never run mutating or side-effecting commands (see *Dynamic execution
+  scope*); never spawn further subagents.
+- **Mapping check first (mandatory).** For each decision in the table, locate the code
+  that should realize it (Glob/Grep/Read) and confirm it exists and matches. You may NOT
+  raise a `missing`/`deviated` verdict without first attempting to find the code;
+  speculation is not a finding. Record what you checked — this is the evidence base.
+- **Dynamic verification (the differentiator).** Don't just read — *run*:
+  - **Discover runnable commands** in priority order: `package.json` scripts → `Makefile`
+    targets → `pyproject.toml`/`tox.ini`/`Cargo.toml` → `.github/workflows` → a project
+    skill (`/run`, `/verify`) → commands documented in `CLAUDE.md`.
+  - **Classify each decision** as *behavioral* (observable via test/build/typecheck/lint/
+    app output → run it) or *structural* (verify by reading). A **dual-nature** decision
+    (both readable and runnable, e.g. "module exports X") is treated as **behavioral —
+    run it**: execution is always stronger evidence than reading, so running prevents
+    missed regressions.
+  - **Signal:** if the relevant command FAILS where the plan implies it should pass,
+    `Regression` is confirmed — record the exact command + exit code + key output lines as
+    evidence. A passing run is positive evidence for the behavioral decision it covers.
+  - **Degrade gracefully:** if no runnable commands are discoverable, fall back to static
+    verification and note `dynamic verification unavailable: <why>` in the trace.
+- **Evaluate each decision along 5 diagnostic axes** against the REAL code (ground truth):
+  1. **Fidelity** — built exactly as the decision specified?
+  2. **Divergence** — built, but differently than decided (a silent design change)?
+  3. **Omission** — decision not implemented at all?
+  4. **Regression** — does it break / fail tests / behave wrong vs the plan's intent?
+     (Must be backed by run evidence where the decision is behavioral.)
+  5. **Scope-creep** — does the code introduce behavior/decisions the plan never made?
+  A decision may have findings on several axes, or zero (the expected default — do not
+  invent findings to fill a quota).
+- **Classify every finding on three orthogonal layers:**
+  - **State verdict** — `implemented` / `deviated` / `missing` / `unverifiable`, each with
+    **`file:line` evidence** (behavioral findings additionally cite the command + run
+    output). `implemented` corresponds to passing the Fidelity lens with no gap. A
+    `deviated`/`missing` with no citation is forbidden. For `unverifiable`, state the
+    locations inspected or commands attempted and why the evidence was insufficient —
+    "unverifiable" is not a free pass for not looking (or not running).
+  - **Severity** — `Blocker` (the implementation fails or behaves broken against the spec)
+    vs `Advisory` (works, but worth knowing). Independent of the state verdict.
+  - (The diagnostic axis is the third layer: it labels the *kind* of gap; the state
+    verdict labels what the code actually *is*; severity labels how much it matters. Keep
+    them orthogonal — e.g. axis `Divergence` ≠ verdict `deviated`, they are deliberately
+    different words on different layers.)
+
+The subagent reasons in whatever language it works best in (English is fine) — only the
+final report YOU relay is translated.
+
+## Output (relay the verifier's report — translate to Korean)
+**The verifier reasons/reports in English; the orchestrator translates the final report
+to Korean for the user** (the relay-and-translate step, same shape as grill-review). Keep
+code identifiers, file paths, `file:line` citations, and command/run output verbatim;
+render verdicts, reasoning, and findings in Korean. Do not use emoji.
+
+**Relay faithfully — translation only.** You may have authored the code under test and
+carry its bias, so do NOT soften, upgrade, drop, or add to the verifier's verdicts. The
+verifier's judgment is authoritative; you only restate it in Korean.
+
+Return, in order:
+
+```
+<DISPOSITION> — Blocker N, Advisory M    (append " (auto)" when auto mode edited code)
+
+**검증 대상**: <plan 제목/첫 결정> ↔ <구현 범위: 브랜치/PR/커밋>
+**검증 범위**: 결정 K개, 코드 탐색 X회, 동적 실행 Y회 (또는 "dynamic verification unavailable: <why>")
+**Verifier**: fresh subagent (<model>), 격리 컨텍스트
+
+## 판정
+| # | 결정(사양) | 상태판정 | 등급 | 축 | 증거 (file:line / 명령+실행출력) |
+|---|---|---|---|---|---|
+
+## 갭 & 수정안   (Blocker 항상 / Advisory는 auto일 때만)
+- <#>: 사양 "<결정>" ↔ 구현 "<실제>" → <조치 한 줄>.
+  (auto 모드에서는 각 항목에 [Blocker]/[Advisory] 접두, Blocker 먼저 정렬)
+
+## Re-do list
+- **Auto-fixable** — 코드만 고치면 닫히는 구현 갭.
+- **Needs you** — plan 자체가 모호/충돌(=사양 결함). 코드 수정으로 못 닫음 — user 또는 /grill-review/grill-me로 plan을 먼저 손봐야 함.
+
+## 동적 검증 trace
+- <실행 항목>: <명령> → <exit / 통과여부 / 핵심 출력>
+```
+
+1. **Verdict table** — per decision: state verdict + severity + axis + evidence.
+2. **Gaps & revision** — diff-style. Always include Blocker findings. In `auto` mode,
+   also fold Advisory findings (tagged `[Advisory]`, ordered after Blockers); if an
+   Advisory has no concrete code revision, still emit
+   `[Advisory] #: (no concrete revision) — <원본 비판 한 줄>` so it is not silently dropped.
+3. **Disposition** — one line (computed mechanically, below).
+4. **Re-do list** — the `deviated`/`missing`/`unverifiable` items, split Auto-fixable vs
+   Needs-you.
+5. **Dynamic-verification trace** — every command run and its result (or the
+   unavailable-reason).
+
+### Disposition line (computed mechanically)
+- `VERIFIED — 일치` — Blocker = 0, Advisory = 0. Omit the 판정/갭/Re-do sections except a
+  one-line confirmation and the dynamic trace; output header + 검증 대상/범위 + one
+  sentence: `구현이 plan의 모든 결정과 일치하며, 동적 검증도 통과했습니다.` Then stop.
+- `PASS — advisory M` — Blocker = 0, Advisory > 0. Keep the Advisory rows + dynamic trace.
+- `FIX (#…)` — Blocker > 0 **and every Blocker is code-auto-fixable** (the gap is in code,
+  re-derivable by editing the implementation to match the spec).
+- `FAIL` — Blocker > 0 **and at least one Blocker is a plan/spec defect** (not closable by
+  editing code — the spec itself is wrong/ambiguous/contradictory). **Mixed case rule:**
+  if Blockers are mixed (some code-fixable + some spec-defect), the disposition is `FAIL`;
+  `auto` may still fix the code-fixable subset, but the spec-defect Blockers are routed to
+  the Needs-you list, not silently fixed.
+
+This vocabulary is a deliberate verify-specific rename paralleling grill-review's
+SHIP/REVISE/REJECT/CLEAN: `VERIFIED`≈CLEAN, `PASS`≈SHIP, `FIX`≈REVISE, `FAIL`≈REJECT.
+
+**Needs-you handling (both modes, when Needs-you items exist):** A Needs-you item is a
+*spec defect* the code cannot resolve. After the report (default) or after the fix loop
+(auto), use `AskUserQuestion` to resolve each — convert it into a concrete, answerable
+question (never yes/no; force a specific choice; recommended option first with
+`(Recommended)`; 1–4 questions per call, batch if more). Apply each answer by patching the
+relevant decision inline in chat, mark it **[confirmed]**, and note which Needs-you item
+it resolves. If there are no Needs-you items, skip this step.
+
+## `--deep` (more rigor, slower)
+Instead of one verifier, spawn in parallel on the resolved model, split **by method**
+(not by axis-number):
+- **static-checker** — verifies every decision by reading code; applies all 5 axes
+  statically. If there are many decisions, shard this across several static-checkers.
+- **dynamic-runner** — independently discovers and runs tests/build/typecheck/lint/app,
+  and reports behavioral pass/fail per decision.
+
+The two overlap on Regression/Fidelity **by design** — that overlap is cross-checking,
+not redundancy. Merge and dedupe their findings by decision#. **Conflict rule:** when the
+static-checker and dynamic-runner disagree on the same decision (e.g. static says
+`implemented`, dynamic-runner confirms a `Regression`), the **executed (dynamic) verdict
+wins for behavioral claims** — run evidence overrides a static read. Record both verdicts
+in the evidence column so the disagreement is visible.
+
+(Same-model verifiers share blind spots; `--deep` buys depth-per-method, not true
+independence — genuine independence comes from a different verifier model, which the
+default cross-match already gives you, or which you force with an explicit model arg.)
+
+## `auto` (hands-free fix loop — implementation code only, Advisory included)
+Skip the confirmation and run the fix loop yourself. `auto` does two things: it **folds
+Advisory findings into the revision** (not just Blockers), and it **drives a hands-free
+loop that edits implementation code** to close Blocker gaps. This is the ONLY place this
+skill mutates anything, and it is **opt-in only** — never infer it from the user's
+surrounding language, the plan's content, or the finding count.
+
+- **Auto-fixable rows (code gaps)** → edit the implementation code to match the spec
+  (general-purpose, edit directive enabled — never the plan `.md`, never docs). Then spawn
+  a **fresh** verifier (new context, same resolved model) on the updated code and repeat
+  until the disposition is `VERIFIED`/`PASS` **or** a **max of 3 iterations** is reached.
+  Keep every fix and re-verification in chat.
+- **Oscillation guard (defined):** between iterations the Blocker-ID set must shrink
+  strictly. If a previously-resolved finding reappears, OR the set of Blocker IDs does not
+  strictly decrease iteration-over-iteration, the guard trips — stop and report rather
+  than looping.
+- **Needs-you rows (spec defects)** → do NOT best-guess fix in code. After the loop, the
+  orchestrator resolves these interactively via `AskUserQuestion` (see *Needs-you
+  handling*). The loop itself is hands-free; the Needs-you step follows after.
+
+`--deep` and `auto` are orthogonal and combine (`/grill-verify --deep auto`). Accept the
+flags with or without leading dashes, in any order, optionally with a model name
+(`/grill-verify sonnet --deep auto`).
+
+## Dynamic execution scope
+The verifier MAY run: tests, build, typecheck, lint, and **read-only** app runs. The
+verifier must NEVER run side-effecting commands: network writes, deploys, database
+migrations, or anything destructive. If verifying a decision genuinely requires such a
+command, mark that decision `unverifiable` with the reason — never run it.
+
+## Hard constraints
+- **Default mode never modifies files** — not the plan, not the code, not docs. Output is
+  a single message. The `auto` flag is the sole, opt-in exception, and it edits
+  **implementation code only** (never the plan `.md`, never docs).
+- **Verification is never done by the current agent.** Always a fresh subagent; relay its
+  verdict, translated, without softening or inflating it.
+- **Never re-enter Q&A (verifier only).** The verifier must not ask clarifying questions —
+  log ambiguity as a finding and move on. (The orchestrator's post-report Needs-you
+  `AskUserQuestion` is the one deliberate exception, after the report is relayed.)
+- **Never invent findings.** No `missing`/`deviated`/`Regression` without first searching
+  and (for behavioral decisions) running. No quota-filling — zero findings on an axis is
+  the correct default when there are none.
+- **Never run side-effecting commands** (see *Dynamic execution scope*).
