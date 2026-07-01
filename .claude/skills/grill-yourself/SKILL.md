@@ -3,15 +3,20 @@ name: grill-yourself
 description: >-
   Autonomously self-interview a plan or design — pose each grilling question AND
   answer it with your own recommended choice, then produce a two-bucket decision
-  table (Confident / Assumptions·needs you) plus a plan. No back-and-forth
-  dialogue. Terminates on convergence or a 20-decision safety cap. Read-only:
+  table (Confident / Assumptions·needs you) plus a plan. No back-and-forth during
+  the resolution walk itself; if Assumptions/needs-you rows remain, ask the user
+  about them right after emitting the plan via AskUserQuestion, recommended answer
+  pre-filled. Terminates on convergence or a 20-decision safety cap. Read-only:
   never edits project code. Invoke explicitly with /grill-yourself.
 disable-model-invocation: true
 ---
 
 This is the autonomous, no-dialogue counterpart to the `grilling` skill. Instead of
 interviewing the user one question at a time, walk the design tree yourself: pose
-each question AND answer it with your recommended choice, without stopping for input.
+each question AND answer it with your recommended choice, without stopping for input
+during the walk. The one deliberate exception is *after* the plan is on the table: any
+Assumptions/needs-you rows get asked to the user immediately via `AskUserQuestion`
+(recommended answer pre-filled) — see *Needs-you grilling* below.
 
 ## Hard rule: never modify project code
 Plan only. Do NOT use Edit, Write, or NotebookEdit on any source file. Codebase
@@ -40,9 +45,16 @@ Implementation is a separate, user-initiated next turn.
      confirm (deadlines, product direction, priorities, business constraints). The
      plan is complete, but state the assumption you made and flag it.
 4. **Write the plan** that follows from those decisions.
-5. **Footer:** "To flip a decision, re-invoke with `#<n>=<value>`."
+5. **Footer:** "To flip a decision, re-invoke with `#<n>=<value>`." (part of the same
+   emitted message as step 4 — see the *Output format* template below.)
+6. **Needs-you grilling.** Once that message has been sent, if the Assumptions/needs-you
+   bucket has any rows, immediately follow it with `AskUserQuestion` calls to resolve
+   them — same turn, no confirmation needed to proceed. See *Needs-you grilling* below.
 
-Run with zero stops. The user course-corrects afterward by overriding numbered rows.
+Run the resolution walk itself with zero stops. The user course-corrects afterward by
+overriding numbered rows, or by answering the Needs-you questions asked immediately
+after the plan message (step 6) — that step happens automatically, without waiting for
+the user to ask.
 
 ## Termination
 Stop resolving decisions when **either** condition is met:
@@ -95,7 +107,32 @@ To flip a decision, re-invoke with `#<n>=<value>`.
 ```
 
 Match the language of the surrounding conversation (e.g., if the user is writing
-Korean, output in Korean).
+Korean, output in Korean). If the **Assumptions / needs you** bucket is non-empty,
+this output is immediately followed, in the same turn, by the `AskUserQuestion` calls
+described in *Needs-you grilling* below — do not wait for the user to prompt it.
+
+## Needs-you grilling (right after the plan, same turn)
+If the Assumptions/needs-you bucket has rows, don't just leave them sitting in the
+table for the user to notice later — ask about them immediately, in the same turn,
+right after emitting the plan.
+
+- Use the `AskUserQuestion` tool. Convert each Assumptions/needs-you row into a
+  concrete, answerable question. Never ask yes/no — force a specific choice or
+  concrete value. Users can always pick "Other" to type a custom answer.
+- Every question must carry your recommended option, pre-filled from that row's
+  "Assumed value" — place it first in the options list and append `(Recommended)` to
+  its label.
+- `AskUserQuestion` accepts 1–4 questions per call. If there are more than 4
+  needs-you rows, batch across multiple sequential calls.
+- After the user answers, patch the plan: output a revised version of each affected
+  decision inline in chat, marked **[confirmed]**, noting which row it resolves.
+  Don't silently absorb the answer — make the resolution visible.
+- If an answer diverges from the recommended option, propagate the change to any
+  decisions that depended on it, using the same dependency-order logic as the
+  original resolution walk.
+- This is the one deliberate exception to "zero stops": it fires once, after the
+  full plan is already on the table — never mid-walk, never per-decision during the
+  resolution scan itself.
 
 ## Overrides
 If invoked with one or more `#<n>=<value>` arguments, treat those decisions as locked
@@ -103,10 +140,12 @@ to the given values and re-derive everything else around them. This relies on th
 prior decision table being present in the conversation context — if it isn't (e.g. a
 fresh session), ask the user to restate the plan, then re-run the full scan.
 
-## The one allowed stop
+## The one allowed stop (before the scan)
 If no plan or target is given, infer it from the conversation and working context.
 Only if there is genuinely nothing to grill — no plan stated and none inferable — ask
-the user what to grill. That is the sole exception to the zero-stops rule.
+the user what to grill. That is the sole exception to the zero-stops rule during the
+resolution walk itself. (The post-plan Needs-you grilling above is a separate,
+deliberate exception that always fires when applicable — see *Needs-you grilling*.)
 
 ## Self-check before ending the turn
 After emitting the design message, confirm you did NOT call Edit, Write, NotebookEdit,
