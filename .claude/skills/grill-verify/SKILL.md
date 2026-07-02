@@ -11,7 +11,9 @@ description: Objectively verify that a finished IMPLEMENTATION matches the plan 
   (VERIFIED/PASS/FIX/FAIL). Flags: --deep (parallel static-checker + dynamic-runner), auto
   (hands-free loop that edits IMPLEMENTATION CODE ONLY to close Blocker gaps). Optional model
   arg (sonnet/opus/haiku/fable) picks the verifier model; omitted = cross-match (sonnet↔opus)
-  for independence, else inherit this agent's model. Invoke explicitly with /grill-verify.
+  for independence, else inherit this agent's model. Verifier reasoning effort defaults to
+  high; override with an effort arg (low/medium/high/xhigh/max). Invoke explicitly with
+  /grill-verify.
 disable-model-invocation: true
 ---
 
@@ -74,12 +76,22 @@ verifier, `--deep` verifiers, `auto`-loop verifiers):
   - Otherwise (haiku, fable, unknown) → OMIT `model` so the verifier inherits your model.
 
 Parse args leniently: a token matching a known model name sets the model; `deep`/`--deep`
-and `auto`/`--auto` set the flags; a `.md` token is the plan path; a `#N`/`PR#N`/commit
+and `auto`/`--auto` set the flags; a token matching a known effort level sets the verifier
+effort (see *Effort selection*); a `.md` token is the plan path; a `#N`/`PR#N`/commit
 range/path token is the implementation scope. Order doesn't matter, dashes are optional.
 
+## Effort selection (optional arg)
+The args may also carry an effort level — one of **`low` / `medium` / `high` / `xhigh` /
+`max`** — alongside the model name and flags. Resolve the verifier effort **once** and
+apply it to **every** Agent spawn (default verifier, `--deep` verifiers, `auto`-loop
+verifiers):
+
+- **Effort level given** → pass it as the Agent tool's `effort` override on every spawn.
+- **No effort level given** → default to **`high`**.
+
 ## How to run (default: single verifier, report-only)
-Use the Agent tool with `subagent_type=general-purpose`, passing the resolved model, to
-run the verification in a fresh context.
+Use the Agent tool with `subagent_type=general-purpose`, passing the resolved model and
+the resolved effort, to run the verification in a fresh context.
 
 (Note: `general-purpose` retains write tools AND keeps full audit depth — read-only here
 is enforced by **directive**, not by the harness. This mirrors `grill-review`, which uses
@@ -158,7 +170,7 @@ Return, in order:
 
 **검증 대상**: <plan 제목/첫 결정> ↔ <구현 범위: 브랜치/PR/커밋>
 **검증 범위**: 결정 K개, 코드 탐색 X회, 동적 실행 Y회 (또는 "dynamic verification unavailable: <why>")
-**Verifier**: fresh subagent (<model>), 격리 컨텍스트
+**Verifier**: fresh subagent (<model>, effort=<effort>), 격리 컨텍스트
 
 ## 판정
 | # | 결정(사양) | 상태판정 | 등급 | 축 | 증거 (file:line / 명령+실행출력) |
@@ -212,8 +224,8 @@ relevant decision inline in chat, mark it **[confirmed]**, and note which Needs-
 it resolves. If there are no Needs-you items, skip this step.
 
 ## `--deep` (more rigor, slower)
-Instead of one verifier, spawn in parallel on the resolved model, split **by method**
-(not by axis-number):
+Instead of one verifier, spawn in parallel on the resolved model and effort, split **by
+method** (not by axis-number):
 - **static-checker** — verifies every decision by reading code; applies all 5 axes
   statically. If there are many decisions, shard this across several static-checkers.
 - **dynamic-runner** — independently discovers and runs tests/build/typecheck/lint/app,
@@ -239,8 +251,9 @@ surrounding language, the plan's content, or the finding count.
 
 - **Auto-fixable rows (code gaps)** → edit the implementation code to match the spec
   (general-purpose, edit directive enabled — never the plan `.md`, never docs). Then spawn
-  a **fresh** verifier (new context, same resolved model) on the updated code and repeat
-  until the disposition is `VERIFIED`/`PASS` **or** a **max of 3 iterations** is reached.
+  a **fresh** verifier (new context, same resolved model and effort) on the updated code
+  and repeat until the disposition is `VERIFIED`/`PASS` **or** a **max of 3 iterations**
+  is reached.
   Keep every fix and re-verification in chat.
 - **Oscillation guard (defined):** between iterations the Blocker-ID set must shrink
   strictly. If a previously-resolved finding reappears, OR the set of Blocker IDs does not
@@ -251,8 +264,8 @@ surrounding language, the plan's content, or the finding count.
   handling*). The loop itself is hands-free; the Needs-you step follows after.
 
 `--deep` and `auto` are orthogonal and combine (`/grill-verify --deep auto`). Accept the
-flags with or without leading dashes, in any order, optionally with a model name
-(`/grill-verify sonnet --deep auto`).
+flags with or without leading dashes, in any order, optionally with a model name and/or
+effort level (`/grill-verify sonnet high --deep auto`).
 
 ## Dynamic execution scope
 The verifier MAY run: tests, build, typecheck, lint, and **read-only** app runs. The

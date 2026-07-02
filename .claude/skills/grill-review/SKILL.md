@@ -9,7 +9,9 @@ description: Objectively review a plan produced by grill-yourself (or any plan w
   disposition, and a re-grill list. Flags: --deep (parallel reviewers), auto (hands-free
   fix loop that also folds Advisory into the revision). Optional model arg
   (sonnet/opus/haiku/fable) picks the reviewer model; omitted = cross-match (sonnet↔opus)
-  for independence, else inherit this agent's model. Invoke explicitly with /grill-review.
+  for independence, else inherit this agent's model. Reviewer reasoning effort defaults to
+  high; override with an effort arg (low/medium/high/xhigh/max). Invoke explicitly with
+  /grill-review.
 disable-model-invocation: true
 ---
 
@@ -53,12 +55,23 @@ spawn below (the default reviewer, the `--deep` reviewers, and the `auto`-loop r
   - Otherwise (haiku, fable, or unknown) → OMIT the `model` parameter so the reviewer inherits your current model.
 
 Parse args leniently: a token matching a known model name sets the reviewer model;
-`deep`/`--deep` and `auto`/`--auto` set the flags (below); a `.md` token is the plan
-path (see *Input*). Order doesn't matter, dashes are optional.
+`deep`/`--deep` and `auto`/`--auto` set the flags (below); a token matching a known
+effort level sets the reviewer effort (see *Effort selection*); a `.md` token is the
+plan path (see *Input*). Order doesn't matter, dashes are optional.
+
+## Effort selection (optional arg)
+The args may also carry an effort level — one of **`low` / `medium` / `high` / `xhigh` /
+`max`** — alongside the model name and flags. Resolve the reviewer effort **once** and
+apply it to **every** Agent spawn below (the default reviewer, the `--deep` reviewers, and
+the `auto`-loop reviewers):
+
+- **Effort level given** → pass it as the Agent tool's `effort` override on every spawn.
+- **No effort level given** → default to **`high`**.
 
 ## How to run (default: fast single reviewer)
 Use the Agent tool with `subagent_type=general-purpose`, passing the model resolved in
-*Model selection*, to run the review in a fresh context.
+*Model selection* and the effort resolved in *Effort selection*, to run the review in a
+fresh context.
 
 (Note: `general-purpose` retains write tools — read-only here is enforced by
 **directive**, not by the harness. So state the read-only rule explicitly and forbid
@@ -120,7 +133,7 @@ Return, in order:
 
 **검토 대상**: <mode> / <plan 제목 또는 첫 결정 요약>
 **검토 범위**: 결정 K개, 코드 탐색 X회 (또는 "코드 무관 plan")
-**리뷰어**: fresh subagent (<model>), 격리 컨텍스트
+**리뷰어**: fresh subagent (<model>, effort=<effort>), 격리 컨텍스트
 
 ## 비판
 | # | 결정 | 사실판정 | 등급 | 축 | 비판 (현실 충돌이면 file:line 인용) |
@@ -173,7 +186,7 @@ Needs-you item.
   `이 plan은 5개 축(모순/숨겨진 가정/누락/현실 충돌/모호함) 모두에서 결함이 발견되지 않았습니다. 진행을 권장합니다.` Then stop.
 
 ## `--deep` (more rigor, slower)
-Instead of one reviewer, spawn in parallel on the resolved model:
+Instead of one reviewer, spawn in parallel on the resolved model and effort:
 - **fact-checker** — axes ②③④ + reality check, verifying rows against code. If there
   are many rows, shard this across several fact-checkers by row.
 - **critic** — axes ①⑤ + plan-level coherence / feasibility only.
@@ -192,8 +205,9 @@ resolution step is not:
 - **Auto-fixable rows** → re-derive them by invoking the `grill-yourself` skill (via the
   Skill tool) on those rows. It relies on the prior decision table being in context; if
   its instructions aren't loaded, read `~/.claude/skills/grill-yourself/SKILL.md` first.
-  Then spawn a **fresh** reviewer (new context, same resolved model) on the revised plan
-  and repeat until the disposition is SHIP **or** a **max of 3 iterations** is reached.
+  Then spawn a **fresh** reviewer (new context, same resolved model and effort) on the
+  revised plan and repeat until the disposition is SHIP **or** a **max of 3 iterations**
+  is reached.
   Keep every revision in chat — never write it back over the input `.md`.
 - **Oscillation guard** — if a fix introduces a new failure, stop and report rather
   than looping.
@@ -202,8 +216,9 @@ resolution step is not:
   above). The fix loop itself runs hands-free; the Needs-you resolution step follows after.
 
 `--deep` and `auto` are orthogonal and combine (`/grill-review --deep auto`). Accept the
-flags with or without leading dashes and in any order, and an optional model name
-alongside them (`/grill-review sonnet --deep auto`). **Auto mode is opt-in** — only the
+flags with or without leading dashes and in any order, and an optional model name and/or
+effort level alongside them (`/grill-review sonnet high --deep auto`). **Auto mode is
+opt-in** — only the
 explicit `auto` argument activates it; never infer it from the user's surrounding
 language, the plan's content, or the finding count.
 
