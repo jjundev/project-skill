@@ -6,8 +6,8 @@ description: Objectively review a plan produced by grill-yourself (or any plan w
   hidden assumption, omission, reality mismatch, vagueness) against the real codebase,
   and returns a two-layer verdict — fact (confirmed/false/unverifiable, file:line
   evidence) × severity (Blocker/Advisory) — plus a diff-style revision for Blockers, a
-  disposition, and a re-grill list. Flags: --deep (parallel reviewers), auto (hands-free
-  fix loop that also folds Advisory into the revision). Optional model arg
+  disposition, and a re-grill list. Flags: --deep (parallel reviewers), auto (Needs-you
+  first, then hands-free fix loop that also folds Advisory into the revision). Optional model arg
   (sonnet/opus/haiku/fable) picks the reviewer model; omitted = cross-match (sonnet↔opus)
   for independence, else inherit this agent's model. Reviewer reasoning effort defaults to
   high; override with an effort arg (low/medium/high/xhigh/max). Invoke explicitly with
@@ -145,7 +145,7 @@ Return, in order:
 
 ## Re-grill list
 - **Auto-fixable** — 코드 기반 실패. grill-yourself가 ground truth 재독으로 재유도 가능.
-- **Needs you** — user-only (가정) 실패. 재유도해도 또 다른 추측일 뿐, user(또는 /grill-me)만 해결.
+- **Needs you** — user-only (가정) 실패. 재유도해도 또 다른 추측일 뿐, user(또는 /grill-me)만 해결. 1차 리뷰 직후, 재유도 loop나 default 재유도 제안 전에 해결.
 
 ## Reality check trace
 - <검증 항목>: <결과>
@@ -161,11 +161,13 @@ Return, in order:
 3. **Disposition** — one line: **SHIP / REVISE (which rows) / REJECT**.
 4. **Re-grill list** — the false / unverifiable items, split Auto-fixable vs Needs-you.
 
-Then **offer once** (default mode only): "Re-grill the auto-fixable rows now?"
+When Needs-you items exist, resolve them first. Then **offer once** (default mode only):
+"Re-grill the auto-fixable rows now?"
 
-**Needs-you grilling (both modes, when Needs-you items exist):** After the review (default) or
-after the fix loop completes (auto), use the `AskUserQuestion` tool to ask the user about each
-Needs-you item.
+**Needs-you grilling (both modes, when Needs-you items exist):** After the 1st review,
+before any re-derive loop, use the `AskUserQuestion` tool to ask the user about each
+Needs-you item. In `auto`, if a later loop iteration discovers a new Needs-you item,
+pause the loop, resolve it immediately, then resume with the confirmed decision in context.
 - Convert each unresolved assumption into a concrete, answerable question. Never ask a yes/no
   question — force a specific choice or concrete answer. Users can always pick "Other" to
   type a custom answer.
@@ -196,24 +198,29 @@ training blind spots; --deep buys depth-per-lens, not true independence — genu
 comes from a **different reviewer model**, which the default cross-match (sonnet↔opus) already
 gives you, or which you can force with an explicit model arg.)
 
-## `auto` (hands-free fix loop, Advisory included)
+## `auto` (Needs-you first, then hands-free fix loop, Advisory included)
 Skip the confirmation and run the fix loop yourself. `auto` does two things at once:
 it **folds Advisory findings into the revision** (not just Blockers), and it **drives a
-hands-free re-derive loop**. After the loop, Needs-you items are resolved interactively
-via AskUserQuestion (same as default mode) — the loop is hands-free; the Needs-you
-resolution step is not:
-- **Auto-fixable rows** → re-derive them by invoking the `grill-yourself` skill (via the
-  Skill tool) on those rows. It relies on the prior decision table being in context; if
-  its instructions aren't loaded, read `~/.claude/skills/grill-yourself/SKILL.md` first.
-  Then spawn a **fresh** reviewer (new context, same resolved model and effort) on the
-  revised plan and repeat until the disposition is SHIP **or** a **max of 3 iterations**
-  is reached.
+hands-free re-derive loop**. The loop is hands-free only after user-only assumptions are
+confirmed:
+- **Step 1 — Needs-you rows first** → Do NOT best-guess fill. After the 1st review, if
+  any Needs-you rows exist, resolve them interactively via AskUserQuestion (see
+  *Needs-you grilling*) and place the confirmed decisions in context before any
+  re-derive loop starts. If there are no Needs-you rows, skip this step.
+- **Step 2 — Auto-fixable rows** → re-derive them by invoking the `grill-yourself`
+  skill (via the Skill tool) on those rows. It relies on the prior decision table being
+  in context; if its instructions aren't loaded, read
+  `~/.claude/skills/grill-yourself/SKILL.md` first. Then spawn a **fresh** reviewer
+  (new context, same resolved model and effort) on the revised plan and repeat until
+  the disposition is SHIP **or** a **max of 3 iterations** is reached. The 3-iteration
+  cap counts re-derive loop iterations only; Needs-you resolution steps do not count.
   Keep every revision in chat — never write it back over the input `.md`.
-- **Oscillation guard** — if a fix introduces a new failure, stop and report rather
-  than looping.
-- **Needs-you (user-only) rows** → Do NOT best-guess fill. After the fix loop completes,
-  the orchestrator uses AskUserQuestion to resolve these interactively (see *Needs-you grilling*
-  above). The fix loop itself runs hands-free; the Needs-you resolution step follows after.
+- **Step 3 — New Needs-you during the loop** → if a later iteration discovers a new
+  Needs-you row, pause the loop, resolve it immediately via AskUserQuestion, place the
+  confirmed decision in context, then resume the loop.
+- **Oscillation guard** — if a fix introduces a new auto-fixable failure, stop and
+  report rather than looping. A newly discovered Needs-you row is not oscillation;
+  resolve it through Step 3 instead.
 
 `--deep` and `auto` are orthogonal and combine (`/grill-review --deep auto`). Accept the
 flags with or without leading dashes and in any order, and an optional model name and/or
@@ -227,8 +234,10 @@ language, the plan's content, or the finding count.
   single message. Editing is the next turn's job, driven by the user.
 - **Never re-enter Q&A (reviewer only).** The reviewer subagent must not ask clarifying
   questions — if the plan is ambiguous, log it as a Vagueness finding and move on.
-  (The orchestrator's post-review Needs-you grilling via AskUserQuestion is the one
-  deliberate exception and is handled after the report is relayed, not during review.)
+  (The orchestrator's Needs-you grilling via AskUserQuestion is the one deliberate
+  exception: in default mode it runs after the 1st report, in `auto` it runs before the
+  re-derive loop, and in `auto` loop iterations it may pause the loop to resolve a newly
+  discovered Needs-you row before resuming. The reviewer still never asks questions.)
 - **Never invent Reality mismatches.** If you didn't actually grep/read, you can't claim
   the codebase contradicts the plan.
 - **Never fill quota.** No findings on an axis is the correct output when there are none.
