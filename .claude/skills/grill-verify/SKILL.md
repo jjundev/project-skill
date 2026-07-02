@@ -9,7 +9,8 @@ description: Objectively verify that a finished IMPLEMENTATION matches the plan 
   Regression/Scope-creep) × state (implemented/deviated/missing/unverifiable, file:line +
   run-output evidence) × severity (Blocker/Advisory) — plus a mechanical disposition
   (VERIFIED/PASS/FIX/FAIL). Flags: --deep (parallel static-checker + dynamic-runner), auto
-  (hands-free loop that edits IMPLEMENTATION CODE ONLY to close Blocker gaps). Optional model
+  (Needs-you/spec defects first, then a hands-free loop that edits IMPLEMENTATION CODE ONLY
+  to close code Blocker gaps). Optional model
   arg (sonnet/opus/haiku/fable) picks the verifier model; omitted = cross-match (sonnet↔opus)
   for independence, else inherit this agent's model. Verifier reasoning effort defaults to
   high; override with an effort arg (low/medium/high/xhigh/max). Invoke explicitly with
@@ -34,11 +35,12 @@ actually work?*
 
 ## Identity & the one mutation carve-out
 **Default mode is read-only reporting; the verifier never edits any file.** The single
-exception is opt-in `auto`, which edits **implementation code ONLY** (never the plan
-`.md`, never docs) to close *verified Blocker* gaps, bounded by `max 3 iterations` and an
-oscillation guard. "Never modify files" is a hard constraint **scoped to default/report
-mode** — see *Hard constraints*. Outside `auto`, the output is a single message; mutating
-anything is the next turn's job, driven by the user.
+exception is opt-in `auto`, which first confirms any Needs-you/spec defects, then edits
+**implementation code ONLY** (never the plan `.md`, never docs) to close code Blocker
+gaps, bounded by `max 3 iterations` and an oscillation guard. "Never modify files" is a
+hard constraint **scoped to default/report mode** — see *Hard constraints*. Outside
+`auto`, the output is a single message; mutating anything is the next turn's job, driven
+by the user.
 
 ## Input
 Take the plan + decision table from a `.md` path if given as an argument, otherwise from
@@ -182,7 +184,7 @@ Return, in order:
 
 ## Re-do list
 - **Auto-fixable** — 코드만 고치면 닫히는 구현 갭.
-- **Needs you** — plan 자체가 모호/충돌(=사양 결함). 코드 수정으로 못 닫음 — user 또는 /grill-review/grill-me로 plan을 먼저 손봐야 함.
+- **Needs you** — plan 자체가 모호/충돌(=사양 결함). 코드 수정으로 못 닫음 — user 또는 /grill-review/grill-me로 plan을 먼저 손봐야 함. auto에서는 코드 수정 loop 전에 먼저 확정.
 
 ## 동적 검증 trace
 - <실행 항목>: <명령> → <exit / 통과여부 / 핵심 출력>
@@ -195,7 +197,7 @@ Return, in order:
    `[Advisory] #: (no concrete revision) — <원본 비판 한 줄>` so it is not silently dropped.
 3. **Disposition** — one line (computed mechanically, below).
 4. **Re-do list** — the `deviated`/`missing`/`unverifiable` items, split Auto-fixable vs
-   Needs-you.
+   Needs-you. Resolve Needs-you/spec defects before any auto code-fix loop.
 5. **Dynamic-verification trace** — every command run and its result (or the
    unavailable-reason).
 
@@ -210,18 +212,22 @@ Return, in order:
   editing code — the spec itself is wrong/ambiguous/contradictory). **Mixed case rule:**
   if Blockers are mixed (some code-fixable + some spec-defect), the disposition is `FAIL`;
   `auto` may still fix the code-fixable subset, but the spec-defect Blockers are routed to
-  the Needs-you list, not silently fixed.
+  the Needs-you list, not silently fixed. After the user answers Needs-you questions,
+  apply the answers as inline **[confirmed]** spec decisions, then recompute which
+  Blockers remain before entering or resuming the code-fix loop.
 
 This vocabulary is a deliberate verify-specific rename paralleling grill-review's
 SHIP/REVISE/REJECT/CLEAN: `VERIFIED`≈CLEAN, `PASS`≈SHIP, `FIX`≈REVISE, `FAIL`≈REJECT.
 
 **Needs-you handling (both modes, when Needs-you items exist):** A Needs-you item is a
-*spec defect* the code cannot resolve. After the report (default) or after the fix loop
-(auto), use `AskUserQuestion` to resolve each — convert it into a concrete, answerable
+*spec defect* the code cannot resolve. After the 1st verify report, before any code-fix
+loop, use `AskUserQuestion` to resolve each — convert it into a concrete, answerable
 question (never yes/no; force a specific choice; recommended option first with
 `(Recommended)`; 1–4 questions per call, batch if more). Apply each answer by patching the
 relevant decision inline in chat, mark it **[confirmed]**, and note which Needs-you item
-it resolves. If there are no Needs-you items, skip this step.
+it resolves. If a later loop iteration discovers a new Needs-you/spec defect, pause the
+loop, resolve it immediately, re-baseline the remaining Blockers, and resume. If there
+are no Needs-you items, skip this step.
 
 ## `--deep` (more rigor, slower)
 Instead of one verifier, spawn in parallel on the resolved model and effort, split **by
@@ -242,26 +248,35 @@ in the evidence column so the disagreement is visible.
 independence — genuine independence comes from a different verifier model, which the
 default cross-match already gives you, or which you force with an explicit model arg.)
 
-## `auto` (hands-free fix loop — implementation code only, Advisory included)
+## `auto` (Needs-you first, then hands-free code fix loop — implementation code only, Advisory included)
 Skip the confirmation and run the fix loop yourself. `auto` does two things: it **folds
 Advisory findings into the revision** (not just Blockers), and it **drives a hands-free
-loop that edits implementation code** to close Blocker gaps. This is the ONLY place this
-skill mutates anything, and it is **opt-in only** — never infer it from the user's
+loop that edits implementation code** to close code Blocker gaps. This is the ONLY place
+this skill mutates anything, and it is **opt-in only** — never infer it from the user's
 surrounding language, the plan's content, or the finding count.
 
-- **Auto-fixable rows (code gaps)** → edit the implementation code to match the spec
-  (general-purpose, edit directive enabled — never the plan `.md`, never docs). Then spawn
-  a **fresh** verifier (new context, same resolved model and effort) on the updated code
-  and repeat until the disposition is `VERIFIED`/`PASS` **or** a **max of 3 iterations**
-  is reached.
-  Keep every fix and re-verification in chat.
-- **Oscillation guard (defined):** between iterations the Blocker-ID set must shrink
-  strictly. If a previously-resolved finding reappears, OR the set of Blocker IDs does not
-  strictly decrease iteration-over-iteration, the guard trips — stop and report rather
-  than looping.
-- **Needs-you rows (spec defects)** → do NOT best-guess fix in code. After the loop, the
-  orchestrator resolves these interactively via `AskUserQuestion` (see *Needs-you
-  handling*). The loop itself is hands-free; the Needs-you step follows after.
+- **Step 1 — Needs-you rows (spec defects) first** → do NOT best-guess fix in code.
+  After the 1st verify report, resolve these interactively via `AskUserQuestion` (see
+  *Needs-you handling*) and apply the answers as inline **[confirmed]** spec decisions.
+  Then recompute which Blockers remain before any code-fix loop starts. If no Needs-you
+  rows exist, skip this step.
+- **Step 2 — Auto-fixable rows (code gaps)** → edit the implementation code to match the
+  confirmed spec (general-purpose, edit directive enabled — never the plan `.md`, never
+  docs). Then spawn a **fresh** verifier (new context, same resolved model and effort) on
+  the updated code and repeat until the disposition is `VERIFIED`/`PASS` **or** a
+  **max of 3 iterations** is reached. The 3-iteration cap counts code-fix iterations
+  only; Needs-you/spec-defect resolution steps do not count. Keep every fix and
+  re-verification in chat.
+- **Step 3 — New Needs-you during the loop** → if a later iteration discovers a new
+  Needs-you/spec-defect Blocker, pause the code-fix loop, resolve it immediately via
+  AskUserQuestion, apply the answer as an inline **[confirmed]** spec decision,
+  re-baseline the remaining Blocker-ID set, then resume.
+- **Oscillation guard (defined):** between code-fix iterations the Blocker-ID set must
+  shrink strictly. If a previously-resolved code finding reappears, OR the set of
+  code-fixable Blocker IDs does not strictly decrease iteration-over-iteration, the guard
+  trips — stop and report rather than looping. A new Needs-you/spec-defect Blocker is not
+  oscillation; handle it through Step 3, and do not count that user-resolution step as an
+  iteration.
 
 `--deep` and `auto` are orthogonal and combine (`/grill-verify --deep auto`). Accept the
 flags with or without leading dashes, in any order, optionally with a model name and/or
@@ -280,8 +295,11 @@ command, mark that decision `unverifiable` with the reason — never run it.
 - **Verification is never done by the current agent.** Always a fresh subagent; relay its
   verdict, translated, without softening or inflating it.
 - **Never re-enter Q&A (verifier only).** The verifier must not ask clarifying questions —
-  log ambiguity as a finding and move on. (The orchestrator's post-report Needs-you
-  `AskUserQuestion` is the one deliberate exception, after the report is relayed.)
+  log ambiguity as a finding and move on. (The orchestrator's Needs-you/spec-defect
+  `AskUserQuestion` is the one deliberate exception: in default mode it runs after the
+  report, in `auto` it runs before the code-fix loop, and during `auto` it may pause the
+  loop to resolve a newly discovered spec defect before re-baselining and resuming. The
+  verifier still never asks questions.)
 - **Never invent findings.** No `missing`/`deviated`/`Regression` without first searching
   and (for behavioral decisions) running. No quota-filling — zero findings on an axis is
   the correct default when there are none.
