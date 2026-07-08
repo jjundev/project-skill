@@ -10,8 +10,8 @@ description: Objectively review a plan produced by grill-yourself (or any plan w
   first, then hands-free fix loop that also folds Advisory into the revision). Optional model arg
   (sonnet/opus/haiku/fable) picks the reviewer model; omitted = cross-match (sonnet↔opus)
   for independence, else inherit this agent's model. Reviewer reasoning effort defaults to
-  high; override with an effort arg (low/medium/high/xhigh/max). Invoke explicitly with
-  /grill-review.
+  high; override with an effort arg (low/medium/high/xhigh/max). Optionally pass --viz to render the report as an HTML artifact
+  dashboard. Invoke explicitly with /grill-review.
 disable-model-invocation: true
 ---
 
@@ -56,8 +56,9 @@ spawn below (the default reviewer, the `--deep` reviewers, and the `auto`-loop r
 
 Parse args leniently: a token matching a known model name sets the reviewer model;
 `deep`/`--deep` and `auto`/`--auto` set the flags (below); a token matching a known
-effort level sets the reviewer effort (see *Effort selection*); a `.md` token is the
-plan path (see *Input*). Order doesn't matter, dashes are optional.
+effort level sets the reviewer effort (see *Effort selection*); a `viz`/`--viz` token
+turns on HTML visualization (see *Visualization*); a `.md` token is the plan path (see
+*Input*). Order doesn't matter, dashes are optional.
 
 ## Effort selection (optional arg)
 The args may also carry an effort level — one of **`low` / `medium` / `high` / `xhigh` /
@@ -187,6 +188,30 @@ pause the loop, resolve it immediately, then resume with the confirmed decision 
   sections; output the header + 검토 대상/범위 lines + one sentence:
   `이 plan은 5개 축(모순/숨겨진 가정/누락/현실 충돌/모호함) 모두에서 결함이 발견되지 않았습니다. 진행을 권장합니다.` Then stop.
 
+## Visualization (optional, `--viz`)
+When the args carry a `viz`/`--viz` token, ALSO render the review as a self-contained HTML
+artifact dashboard — but only **after** the normal chat report is emitted and translated.
+The translated chat report stays the primary deliverable and comes first; the artifact is
+supplementary. Read the shared procedure at
+`<this skill's base directory>/../_shared/grill-viz.md` (the `_shared` sibling of this
+skill's directory; read it by path, not via the Skill tool) and follow it.
+
+Map the review into the data contract: `title` = plan title / first-decision summary;
+`subtitle` = `<mode> / 결정 K개 / <model>, effort=<effort>`; `disposition` = the disposition
+line and `dispositionKind` = its keyword (`ship`/`revise`/`reject`/`clean`); ONE `buckets`
+entry (name e.g. `"비판"`) whose rows set `n`, `question` = the full 결정 text (OMIT
+`answer`), `axis`, `verdict`, `severity`, and `rationale`; `revisions` = the 수정안;
+`realityTrace` = the reality-check trace lines; `reGrillList` = the Auto-fixable / Needs-you
+split. Favicon 🔎.
+
+- **CLEAN disposition** → emit a minimal artifact: title + the green CLEAN banner, no cards
+  (matching the "no findings" chat output).
+- **`auto` mode** → update the SAME artifact once, after the fix loop finishes, to the final
+  revised state; note the iteration count in `subtitle`. Do not redeploy per iteration.
+
+If the Artifact tool is unavailable, the shared procedure prints the HTML file path instead
+— visualization never blocks or delays the report.
+
 ## `--deep` (more rigor, slower)
 Instead of one reviewer, spawn in parallel on the resolved model and effort:
 - **fact-checker** — axes ②③④ + reality check, verifying rows against code. If there
@@ -231,7 +256,9 @@ language, the plan's content, or the finding count.
 
 ## Hard constraints
 - **Never modify files.** Not the plan, not the codebase, not docs. The output is a
-  single message. Editing is the next turn's job, driven by the user.
+  single message. Editing is the next turn's job, driven by the user. (The sole exception:
+  a `--viz` run writes ONE self-contained HTML file to the scratchpad directory for the
+  visualization — never the plan, codebase, or docs. See *Visualization*.)
 - **Never re-enter Q&A (reviewer only).** The reviewer subagent must not ask clarifying
   questions — if the plan is ambiguous, log it as a Vagueness finding and move on.
   (The orchestrator's Needs-you grilling via AskUserQuestion is the one deliberate
