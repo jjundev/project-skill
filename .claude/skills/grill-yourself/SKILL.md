@@ -7,7 +7,8 @@ description: >-
   the resolution walk itself; if Assumptions/needs-you rows remain, ask the user
   about them right after emitting the plan via AskUserQuestion, recommended answer
   pre-filled. Terminates on convergence or a 20-decision safety cap. Read-only:
-  never edits project code. Invoke explicitly with /grill-yourself.
+  never edits project code. Optionally pass --viz to also render the plan as a
+  self-contained HTML artifact dashboard. Invoke explicitly with /grill-yourself.
 disable-model-invocation: true
 ---
 
@@ -22,7 +23,10 @@ Assumptions/needs-you rows get asked to the user immediately via `AskUserQuestio
 Plan only. Do NOT use Edit, Write, or NotebookEdit on any source file. Codebase
 exploration is strictly read-only (Read / Grep / Glob, and Bash for inspection only).
 The artifact you produce is a plan — output it in chat. Write it to a `.md` file only
-if the user explicitly asks. The design is the deliverable, NOT a green light to build:
+if the user explicitly asks. (The one exception: with `--viz`, you may write a single
+self-contained HTML file to the scratchpad directory for the visualization — never the
+plan `.md`, project code, or docs. See *Visualization* below.) The design is the
+deliverable, NOT a green light to build:
 even if the resolved design is immediately implementable, do not implement it.
 Implementation is a separate, user-initiated next turn.
 
@@ -111,6 +115,29 @@ Korean, output in Korean). If the **Assumptions / needs you** bucket is non-empt
 this output is immediately followed, in the same turn, by the `AskUserQuestion` calls
 described in *Needs-you grilling* below — do not wait for the user to prompt it.
 
+## Visualization (optional, `--viz`)
+By default the deliverable is the chat plan and nothing else. If the args contain a
+`viz` / `--viz` token (dashes optional; strip it before interpreting any `#<n>=<value>`
+overrides), ALSO render the plan as a self-contained HTML artifact dashboard — but only
+**after** the plan message is on the table. The chat output is unchanged and always comes
+first; the artifact is supplementary.
+
+1. Emit the full plan and run *Needs-you grilling* exactly as normal.
+2. Read the shared procedure at `<this skill's base directory>/../_shared/grill-viz.md`
+   (the `_shared` sibling of this skill's directory; read it by path, not via the Skill
+   tool) and follow it. Map this skill's output into the data contract: `title` = the plan
+   title; two `buckets` — `"Confident"` and `"Assumptions / needs you"` — whose rows carry
+   `n`/`question`/`answer`/`rationale` (set `severity:"confident"` on Confident rows for a
+   green badge); `planBody` = the `## Plan` narrative. Leave the review-only fields
+   (`verdict`/`axis`/`revisions`/`realityTrace`/`reGrillList`/`disposition`) omitted.
+   Favicon 📋.
+3. After Needs-you confirmations — or any `#<n>=<value>` re-derive — change decisions,
+   rebuild the data and redeploy the SAME scratchpad file path so the artifact updates in
+   place (same file path → same URL).
+
+If the Artifact tool is unavailable, the shared procedure falls back to printing the HTML
+file path; visualization never blocks or delays the plan.
+
 ## Needs-you grilling (right after the plan, same turn)
 If the Assumptions/needs-you bucket has rows, don't just leave them sitting in the
 table for the user to notice later — ask about them immediately, in the same turn,
@@ -150,4 +177,7 @@ deliberate exception that always fires when applicable — see *Needs-you grilli
 ## Self-check before ending the turn
 After emitting the design message, confirm you did NOT call Edit, Write, NotebookEdit,
 or an implementation-oriented Bash command during this turn. If you did, you violated
-this skill — the design document is the only allowed output.
+this skill — the design document is the only allowed output. (Exception: a `--viz` run
+may write ONE self-contained HTML file to the scratchpad directory for the visualization —
+that is allowed and is not a violation. Any Edit/Write to the plan `.md`, project code, or
+docs still is.)
