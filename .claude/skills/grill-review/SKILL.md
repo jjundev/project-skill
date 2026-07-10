@@ -23,7 +23,7 @@ and relay its verdict.
 This skill complements the grill family:
 - `grill-me` / `grill-yourself` → produce a plan
 - **`grill-review`** → critique that plan from a fresh context (this skill, pre-implementation)
-- `reviewing-plans` → review the execution plan (pre-build) · `verifying-implementation` → verify the built code (post-implementation)
+- `verifying-implementation` → verify the built code (post-implementation)
 
 ## Input
 Take the plan + decision table from a `.md` path if given as an argument, otherwise
