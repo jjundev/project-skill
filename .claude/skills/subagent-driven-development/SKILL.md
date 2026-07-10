@@ -100,11 +100,11 @@ conflicts that only emerge from implementation.
 
 Use the least powerful model that can handle each role to conserve cost and increase speed.
 
-**Mechanical implementation tasks** (isolated functions, clear specs, 1-2 files): use a fast, cheap model. Most implementation tasks are mechanical when the plan is well-specified.
+**Mechanical implementation tasks** (isolated functions, clear specs, 1-2 files): use a fast, cheap model (haiku-tier). Most implementation tasks are mechanical when the plan is well-specified.
 
-**Integration and judgment tasks** (multi-file coordination, pattern matching, debugging): use a standard model.
+**Integration and judgment tasks** (multi-file coordination, pattern matching, debugging): use a standard model (sonnet-tier).
 
-**Architecture and design tasks**: use the most capable available model.
+**Architecture and design tasks**: use the most capable available model (opus-tier).
 The final whole-branch review is one of these — dispatch it on the most
 capable available model, not the session default.
 
@@ -128,6 +128,44 @@ that implementer. Single-file mechanical fixes also take the cheapest tier.
 - Touches 1-2 files with a complete spec → cheap model
 - Touches multiple files with integration concerns → standard model
 - Requires design judgment or broad codebase understanding → most capable model
+
+## Effort Selection
+
+Match reasoning effort to what the role demands, paired with the model tier from
+Model Selection above. The scale is `low` / `medium` / `high` / `xhigh` / `max`.
+**Medium is the floor — no role runs at `low`.**
+
+**Always specify effort explicitly when dispatching a subagent.** An omitted effort
+inherits whatever the session is running at, which for a mechanical task is usually
+more than it needs — the effort twin of the "always specify the model" rule above.
+
+| Role | Model | Effort |
+|------|-------|--------|
+| Implementer — mechanical (plan carries full code, or a single-file change) | haiku | **medium** (floor) |
+| Implementer — prose-described, multi-file integration, or debugging | sonnet | **high** |
+| Implementer — design judgment or broad-codebase understanding | opus | **high** (`xhigh` only for exceptionally subtle work) |
+| Task reviewer | sonnet → opus, scaled to the diff | **medium** for a tiny mechanical diff, **high** for a real review |
+| Final whole-branch reviewer | opus | **high** |
+| Fix subagent | the tier of the task it fixes | the effort of the task it fixes |
+
+`xhigh` / `max` are reserved for exceptionally subtle concurrency or security work —
+an escalation, not a default.
+
+**Escalation cross-reference:** when *Handling Implementer Status* raises the model
+for a BLOCKED task (branch 2, "re-dispatch with a more capable model"), raise the
+effort one step too (medium → high → xhigh). For the other BLOCKED branches
+(same-model retry, task-split, escalate-to-human) and for NEEDS_CONTEXT, effort
+holds at its prior value unless the human directs otherwise.
+
+**Note — final reviewer:** the final whole-branch reviewer's effort is guidance only.
+That role is dispatched from `../requesting-code-review/code-reviewer.md`, which has no
+`model:` / `effort:` field today (the same gap exists for model); wiring it there is
+out of scope for this skill.
+
+**Override:** if the human states a blanket effort for the run ("everything at high",
+"be thorough"), it overrides these per-role defaults (as a floor or an exact value) —
+the role the effort arg plays for the grill skills, received here via human instruction
+since this skill is model-invoked with no arg surface.
 
 ## Handling Implementer Status
 
@@ -367,6 +405,8 @@ Done!
 ## Red Flags
 
 **Never:**
+- Omit `effort` on a dispatch — it inherits the session effort and overspends on mechanical tasks
+- Omit `model` on a dispatch — it inherits the session model and silently defeats Model Selection
 - Start implementation on main/master branch without explicit user consent
 - Skip task review, or accept a report missing either verdict (spec compliance AND task quality are both required)
 - Proceed with unfixed issues
