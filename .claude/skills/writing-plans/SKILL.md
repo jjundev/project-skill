@@ -33,6 +33,35 @@ Before defining tasks, map out which files will be created or modified and what 
 
 This structure informs the task decomposition. Each task should produce self-contained changes that make sense independently.
 
+## Decision Checkpoint
+
+Once the File Structure is mapped, pause and scan for decisions that (a) the
+spec and the codebase cannot settle and (b) would change the file structure or
+task decomposition if reversed. These are execution-level forks — a library
+choice with real trade-offs, a schema or data model the spec left open, an
+ambiguous scope boundary. **Cosmetic defaults and anything resolvable by reading
+the code are not checkpoint decisions — decide those yourself and move on.**
+
+If — and only if — such decisions exist, ask the user before writing tasks,
+using the `AskUserQuestion` tool:
+
+- Convert each decision into a concrete, answerable question. Never yes/no —
+  force a specific choice or a concrete value. (The user can always pick "Other"
+  to type their own answer.)
+- Lead with your recommended option: place it first in the options list and
+  append `(Recommended)` to its label, chosen from codebase facts and sound
+  defaults.
+- `AskUserQuestion` takes 1–4 questions per call. If more than 4 decisions
+  remain, batch them across sequential calls.
+- After the answers land, fold each choice into the File Structure and the tasks
+  that follow. If an answer diverges from your recommendation, propagate the
+  change to every decision that depended on it.
+
+**Default to zero questions.** A well-settled spec should leave nothing to ask —
+the design was resolved during brainstorming/grilling, and this checkpoint only
+catches genuine execution forks the spec never covered. Do not manufacture
+questions; if nothing qualifies, proceed straight to task decomposition.
+
 ## Task Right-Sizing
 
 A task is the smallest unit that carries its own test cycle and is worth a
