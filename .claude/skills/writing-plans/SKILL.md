@@ -182,6 +182,41 @@ After writing the complete plan, look at the spec with fresh eyes and check the 
 
 If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
 
+## Automatic Plan Review
+
+After Self-Review and before the Execution Handoff, review the plan with a fresh
+subagent — a light automatic gate that catches plan defects before any code is written.
+
+**Skip this step** only when the plan has exactly one task (a single-task plan isn't
+worth a review round-trip), or when the platform has no subagent capability (note the
+skip in the handoff).
+
+**Dispatch ONE reviewer subagent** using this skill's `plan-document-reviewer-prompt.md`:
+- **Read-only + no skills:** instruct the reviewer to work read-only (Read/Grep/Glob only)
+  and to NOT invoke any Skill or spawn further subagents. (Directive-level — the harness
+  does not enforce it.)
+- **Model — cross-match to the planner** for independence: if you (the planner) are `opus`,
+  run the reviewer on `sonnet`; if `sonnet`, on `opus`; otherwise omit the model override
+  and let it inherit. Pass the model explicitly whenever it applies.
+- **Effort:** fixed to `high`.
+- **Inputs (as file paths / text, never the pasted plan body):** the saved plan file path,
+  the spec/design path if one exists, and the plan's Global Constraints block.
+
+The reviewer returns the template's verdict: **Approved** | **Issues Found** (blocking)
+plus **Recommendations** (advisory).
+
+**Act on the verdict:**
+- **Approved, no recommendations** → proceed to Execution Handoff.
+- **Otherwise** → revise the plan inline to close BOTH the blocking Issues AND the advisory
+  Recommendations, then **re-dispatch the reviewer exactly once** (bounded — never loop more
+  than one re-review).
+- **Disclose the revision:** in the Execution Handoff message, add one line listing what was
+  auto-applied (e.g. "Auto-review closed 2 issues + 3 recommendations: …") so changes are
+  visible, not silent.
+- If **blocking Issues remain** after the single re-review, do NOT proceed silently — surface
+  them in the Execution Handoff (which already asks the user to choose an execution mode) as
+  "⚠️ N blocking issues unresolved after auto-review" so the user decides before executing.
+
 ## Execution Handoff
 
 After saving the plan, offer execution choice:
