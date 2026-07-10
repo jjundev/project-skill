@@ -86,7 +86,7 @@ Keep a skill's favicon identical across every redeploy of the same artifact.
       ]
     }
   ],
-  "planBody": "string?",        // grill-yourself: the free-text "## Plan" narrative (markdown-ish, rendered as pre-wrapped text)
+  "planBody": "string?",        // grill-yourself: the free-text "## Design spec" narrative (markdown-ish, rendered as pre-wrapped text)
   "revisions": [ { "n": "string", "from": "string", "to": "string", "note": "string?" } ],  // review 수정안 / verify 갭
   "realityTrace": [ "string" ], // review reality-check trace / verify dynamic-verification trace lines
   "reGrillList": { "autoFixable": [ "string" ], "needsYou": [ "string" ] }

@@ -79,7 +79,7 @@ implementation."
 ## Output format
 
 ```
-# Plan: <one-line title>
+# Design: <one-line title>
 
 <2–4 sentence summary of the resolved design — what gets built, how it behaves, what
 the user will see.>
@@ -94,7 +94,7 @@ the user will see.>
 | # | Decision (question) | Assumed value | Why only the user can truly decide |
 |---|---|---|---|
 
-## Plan
+## Design spec
 
 <Concrete design specification that follows from the decisions: components, data
 flow, file layout, interfaces, behaviors. Written so an implementer can act on it
@@ -128,7 +128,7 @@ first; the artifact is supplementary.
    tool) and follow it. Map this skill's output into the data contract: `title` = the plan
    title; two `buckets` — `"Confident"` and `"Assumptions / needs you"` — whose rows carry
    `n`/`question`/`answer`/`rationale` (set `severity:"confident"` on Confident rows for a
-   green badge); `planBody` = the `## Plan` narrative. Leave the review-only fields
+   green badge); `planBody` = the `## Design spec` narrative. Leave the review-only fields
    (`verdict`/`axis`/`revisions`/`realityTrace`/`reGrillList`/`disposition`) omitted.
    Favicon 📋.
 3. After Needs-you confirmations — or any `#<n>=<value>` re-derive — change decisions,
