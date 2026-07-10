@@ -1,7 +1,7 @@
 ---
 name: verifying-implementation
 description: Objectively verify that a finished IMPLEMENTATION matches the plan that
-  specified it — the post-implementation counterpart to reviewing-plans. Spawns a fresh
+  specified it — a post-implementation plan-vs-code verifier. Spawns a fresh
   read-only subagent that never saw the authoring reasoning, treats the plan's decision
   table as the SPEC and the actual code as the RESULT, and checks each decision both by
   reading code AND by running tests/build/typecheck/lint/app (dynamic verification). Each
@@ -18,7 +18,7 @@ description: Objectively verify that a finished IMPLEMENTATION matches the plan 
 disable-model-invocation: true
 ---
 
-The post-implementation verifier — the counterpart to `reviewing-plans`. A plan said what
+The post-implementation verifier. A plan said what
 to build; this skill checks whether the code that got built actually does it. The agent that wrote the
 code is the worst judge of whether it matches the spec — it remembers what it *meant*,
 not what it *typed*. So the verification is NEVER done by you (the current agent). You
@@ -27,7 +27,6 @@ hand the plan + the real implementation to a fresh subagent and relay its verdic
 Where this sits in the pipeline:
 - `grill-yourself` / `grill-review` → produce and critique the DESIGN
 - `writing-plans` → turn the design into an executable plan
-- `reviewing-plans` → critique that plan before build (pre-implementation)
 - **`verifying-implementation`** → verify the built implementation against that plan (this skill, post-implementation)
 
 The plan's decision table is the **SPEC**; the actual code is the **RESULT**. The

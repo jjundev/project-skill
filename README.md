@@ -29,20 +29,18 @@ Claude Code용 스킬 세트를 큐레이션한 레포입니다. 스킬들은 `.
 ```
  ┌─────────────── grill 시리즈 (goal 구체화) ───────────────┐   ┌──────────── 구현 파이프라인 ────────────┐
 
-  grill-yourself  ──▶  grill-review  ──▶  writing-plans  ──▶  reviewing-plans  ──▶  subagent-driven  ──▶  verifying-implementation
-  (goal→설계)          (설계 검증)         (구현 계획 수립)      (계획 검토)            (실제 구현)            (구현 검증)
+  grill-yourself  ──▶  grill-review  ──▶  writing-plans  ──▶  subagent-driven  ──▶  verifying-implementation
+  (goal→설계)          (설계 검증)         (구현 계획 수립)      (실제 구현)            (구현 검증)
 ```
 
 - **grill-yourself / grilling** — goal을 파고들어 설계로 구체화 (자율 / 대화형)
 - **grill-review** — 그 설계가 타당한지 fresh 컨텍스트로 적대 검증
 - **writing-plans** — 확정된 설계를 태스크별 실행 대본으로 번역
-- **reviewing-plans** — 그 실행 계획을 구현 전 검토 *(구 grill-plan)*
 - **subagent-driven-development** — 태스크별 서브에이전트로 실제 구현
 - **verifying-implementation** — 구현된 코드를 계획 대비 검증 *(구 grill-verify)*
 
-> `reviewing-plans`와 `verifying-implementation`은 **구현 산출물**(계획·코드)을 검토하므로
-> grill 계열이 아니며, 이번 구조 정리에서 `grill-` 접두어를 뗐습니다. grill-\*는 이제
-> **아이디어 전용**입니다.
+> `verifying-implementation`은 **구현 산출물**(코드)을 검토하므로 grill 계열이 아니며,
+> 구조 정리에서 `grill-` 접두어를 뗐습니다. grill-\*는 이제 **아이디어 전용**입니다.
 
 ---
 
@@ -60,11 +58,10 @@ Claude Code용 스킬 세트를 큐레이션한 레포입니다. 스킬들은 `.
 | `grill-with-docs` | 명시 | grilling + ADR/용어집 문서화 |
 | `grill-yourself-with-docs` | 명시 | grill-yourself + ADR/용어집 문서화 |
 
-### 2. 구현 계획 & 검토
+### 2. 구현 계획
 | 스킬 | 발동 | 설명 |
 |---|---|---|
 | `writing-plans` | 자동 | 설계를 태스크별 TDD 실행 대본으로 작성 |
-| `reviewing-plans` | 명시 | 실행 계획을 구현 전 검토 (추적성/분해/완결성/인터페이스/실행가능성) |
 
 ### 3. 구현 실행
 | 스킬 | 발동 | 설명 |
@@ -108,10 +105,10 @@ Claude Code용 스킬 세트를 큐레이션한 레포입니다. 스킬들은 `.
 
 ## 사용법
 
-- **명시 호출**: `/grill-yourself`, `/reviewing-plans`, `/verifying-implementation` 처럼 슬래시로 직접 실행.
+- **명시 호출**: `/grill-yourself`, `/verifying-implementation` 처럼 슬래시로 직접 실행.
 - **자동 발동**: `writing-plans`·`subagent-driven-development`·`tdd`·`diagnosing-bugs` 등은
   상황이 맞으면 Claude가 알아서 호출.
-- **시각화**: `grill-yourself` / `grill-review` / `reviewing-plans`는 `--viz` 플래그로 결과를
+- **시각화**: `grill-yourself` / `grill-review`는 `--viz` 플래그로 결과를
   HTML 아티팩트 대시보드로도 렌더링 (공유 절차는 `_shared/grill-viz.md`).
 
 ## 대표 흐름 예시
@@ -121,7 +118,6 @@ Claude Code용 스킬 세트를 큐레이션한 레포입니다. 스킬들은 `.
   → /grill-yourself        # goal을 파고들어 설계 확정 (재시도 횟수·백오프·멱등성…)
   → /grill-review          # 설계 적대 검증
   → writing-plans          # 태스크별 실행 대본 (자동)
-  → /reviewing-plans       # 계획 검토
   → subagent-driven-development   # 태스크별 구현 (자동)
   → /verifying-implementation     # 구현을 계획 대비 검증
 ```
