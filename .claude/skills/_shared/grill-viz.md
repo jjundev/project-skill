@@ -1,7 +1,7 @@
-# grill-viz — shared HTML artifact visualization for the grill family
+# grill-viz — shared HTML artifact visualization for the grill skills + plan/impl reviewers
 
 Shared procedure + self-contained HTML skeleton used by `grill-yourself`, `grill-review`,
-and (later) `grill-verify` to render their output as an HTML dashboard via Claude Code's
+`reviewing-plans`, and (later) `verifying-implementation` to render their output as an HTML dashboard via Claude Code's
 **Artifact** tool. This file is NOT an invocable skill (it has no `SKILL.md`/frontmatter);
 each grill skill loads it with a plain `Read` by path — see *How a skill loads this* below.
 
@@ -36,7 +36,7 @@ Read it by path — do NOT try to invoke it via the Skill tool.
    output into it. Fields the skill doesn't produce stay omitted — the skeleton renders
    missing optionals gracefully.
 4. **Write the HTML** to the scratchpad directory named `grill-<skill>-<slug>.html`
-   (`<skill>` = `yourself`/`review`/`verify`; `<slug>` = a short kebab slug of the plan
+   (`<skill>` = `yourself`/`review`/`reviewing-plans`/`verifying-implementation`; `<slug>` = a short kebab slug of the plan
    title). Start from the *HTML skeleton* below, set the `<title>`, and inject the data
    object by replacing the exact token `/*__GRILL_DATA__*/{}` with your JSON object literal
    (swap the whole token, including the trailing `{}` empty-default — leaving it produces
@@ -57,8 +57,8 @@ Read it by path — do NOT try to invoke it via the Skill tool.
      file opens in a browser as-is.
 
 ## Favicons (stable per skill)
-- `grill-yourself` → 📋   ·   `grill-review` → 🔎   ·   `grill-verify` → ✅ (reserved,
-  non-binding forward-compat; grill-verify is not wired yet).
+- `grill-yourself` → 📋   ·   `grill-review` → 🔎   ·   `reviewing-plans` → 🧱   ·   `verifying-implementation` → ✅ (reserved,
+  non-binding forward-compat; verifying-implementation is not wired yet).
 
 Keep a skill's favicon identical across every redeploy of the same artifact.
 
@@ -98,7 +98,9 @@ Consumers:
 - **grill-review** fills `title`, `subtitle`, `disposition(+Kind)`, a single `buckets`
   entry whose rows carry `axis`/`verdict`/`severity`/`rationale` (with `question` = full
   결정, `answer` omitted), plus `revisions`, `realityTrace`, `reGrillList`.
-- **grill-verify** (later) reuses `severity` and `realityTrace` (as the dynamic-verification
+- **reviewing-plans** fills the same fields as grill-review (it is a fresh-context plan
+  reviewer); its rows' `axis` is the plan axes (traceability/decomposition/…). Favicon 🧱.
+- **verifying-implementation** (later) reuses `severity` and `realityTrace` (as the dynamic-verification
   trace) for its three-layer verdict, adding only the optional fields it needs.
 
 ## HTML skeleton
