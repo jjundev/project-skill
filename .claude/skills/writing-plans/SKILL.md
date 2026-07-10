@@ -205,11 +205,15 @@ skip in the handoff).
 The reviewer returns the template's verdict: **Approved** | **Issues Found** (blocking)
 plus **Recommendations** (advisory).
 
-**Act on the verdict:**
+**Act on the verdict.** The re-review is gated on blocking Issues — advisory
+Recommendations alone never trigger another reviewer pass:
 - **Approved, no recommendations** → proceed to Execution Handoff.
-- **Otherwise** → revise the plan inline to close BOTH the blocking Issues AND the advisory
-  Recommendations, then **re-dispatch the reviewer exactly once** (bounded — never loop more
-  than one re-review).
+- **No blocking Issues, advisory Recommendations only** → apply the Recommendations inline,
+  then proceed to Execution Handoff. **Do NOT re-dispatch the reviewer** — advisory fixes
+  don't earn a fresh review round.
+- **Blocking Issues present** → revise the plan inline to close BOTH the blocking Issues AND
+  the advisory Recommendations, then **re-dispatch the reviewer exactly once** (bounded —
+  never loop more than one re-review).
 - **Disclose the revision:** in the Execution Handoff message, add one line listing what was
   auto-applied (e.g. "Auto-review closed 2 issues + 3 recommendations: …") so changes are
   visible, not silent.
