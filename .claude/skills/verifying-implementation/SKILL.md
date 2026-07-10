@@ -1,7 +1,7 @@
 ---
-name: grill-verify
+name: verifying-implementation
 description: Objectively verify that a finished IMPLEMENTATION matches the plan that
-  specified it — the post-implementation companion to grill-review. Spawns a fresh
+  specified it — the post-implementation counterpart to reviewing-plans. Spawns a fresh
   read-only subagent that never saw the authoring reasoning, treats the plan's decision
   table as the SPEC and the actual code as the RESULT, and checks each decision both by
   reading code AND by running tests/build/typecheck/lint/app (dynamic verification). Each
@@ -14,20 +14,21 @@ description: Objectively verify that a finished IMPLEMENTATION matches the plan 
   arg (sonnet/opus/haiku/fable) picks the verifier model; omitted = cross-match (sonnet↔opus)
   for independence, else inherit this agent's model. Verifier reasoning effort defaults to
   high; override with an effort arg (low/medium/high/xhigh/max). Invoke explicitly with
-  /grill-verify.
+  /verifying-implementation.
 disable-model-invocation: true
 ---
 
-The post-implementation companion to `grill-review`. A plan said what to build; this
-skill checks whether the code that got built actually does it. The agent that wrote the
+The post-implementation verifier — the counterpart to `reviewing-plans`. A plan said what
+to build; this skill checks whether the code that got built actually does it. The agent that wrote the
 code is the worst judge of whether it matches the spec — it remembers what it *meant*,
 not what it *typed*. So the verification is NEVER done by you (the current agent). You
 hand the plan + the real implementation to a fresh subagent and relay its verdict.
 
-This skill completes the grill family:
-- `grill-me` / `grill-yourself` → produce a plan
-- `grill-review` → critique that plan from a fresh context (pre-implementation)
-- **`grill-verify`** → verify the implementation against that plan (this skill, post-implementation)
+Where this sits in the pipeline:
+- `grill-yourself` / `grill-review` → produce and critique the DESIGN
+- `writing-plans` → turn the design into an executable plan
+- `reviewing-plans` → critique that plan before build (pre-implementation)
+- **`verifying-implementation`** → verify the built implementation against that plan (this skill, post-implementation)
 
 The plan's decision table is the **SPEC**; the actual code is the **RESULT**. The
 verifier asks one question per decision: *was this built, as decided, and does it
@@ -278,9 +279,9 @@ surrounding language, the plan's content, or the finding count.
   oscillation; handle it through Step 3, and do not count that user-resolution step as an
   iteration.
 
-`--deep` and `auto` are orthogonal and combine (`/grill-verify --deep auto`). Accept the
+`--deep` and `auto` are orthogonal and combine (`/verifying-implementation --deep auto`). Accept the
 flags with or without leading dashes, in any order, optionally with a model name and/or
-effort level (`/grill-verify sonnet high --deep auto`).
+effort level (`/verifying-implementation sonnet high --deep auto`).
 
 ## Dynamic execution scope
 The verifier MAY run: tests, build, typecheck, lint, and **read-only** app runs. The
